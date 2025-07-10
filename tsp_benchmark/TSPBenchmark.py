@@ -301,7 +301,9 @@ class TSPBenchmark:
             aer_backend = self._select_optimal_backend(backend_type, use_gpu, n_vars)
 
             # Optimize transpilation
-            transpiled_ansatz = transpile(ansatz, backend=aer_backend, optimization_level=2)
+            #transpiled_ansatz = transpile(ansatz, backend=aer_backend, optimization_level=2)
+            pm = generate_preset_pass_manager(backend=aer_backend, optimization_level=1)
+            transpiled_ansatz = pm.run(ansatz)
 
             print(f"  Number of qubits: {n_vars}, QAOA layers: {p}")
             print(f"  Backend: {aer_backend}")
