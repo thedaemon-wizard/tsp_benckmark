@@ -1,7 +1,10 @@
 from setuptools import setup, find_packages
 
 setup(
-    name='TSPBenchmark',
+    name='tsp_benchmark',
     version='1.0.0',
-    packages=find_packages()
+    author="Amon-koike",
+    packages=find_packages(),
+    install_requires=["requests"],
+    include_package_data=True,
 )

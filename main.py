@@ -29,7 +29,7 @@ import openjij as oj
 
 
 
-from TSPBenchmark import *
+from tsp_benchmark import *
 
 # Usage example and test (Qiskit v2.0 compatible)
 if __name__ == "__main__":
