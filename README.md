@@ -33,7 +33,7 @@ pip install git+https://github.com/thedaemon-wizard/tsp_benckmark
 !pip install git+https://github.com/thedaemon-wizard/tsp_benckmark
 
 # Import and use
-from tsp_benchmark import TSPBenchmark, Algorithm
+from tsp_benchmark import TSPBenchmark, Algorithm, TSPResult
 
 # Create a TSP instance with coordinates
 coordinates = [
