@@ -557,19 +557,17 @@ class TSPBenchmark:
             
             # GPU使用時の制限回避設定
             if device == 'GPU':
-                backend_options.update({
-                    #'precision': 'single',  # メモリ使用量削減
-                    'max_memory_mb': -1,  # メモリ制限を無効化（重要！）
-                    'max_parallel_threads': 1,
-                    'max_parallel_experiments': 1,
-                    'enable_truncation': True,  # 不要な量子ビットを自動削除
-                })
                 
                 # 大規模回路用の追加設定
-                if n_vars > 25:
+                if n_vars > 30:
                     # blocking機能で分散処理
                     blocking_qubits = min(25, max(20, n_vars - 5))
                     backend_options.update({
+                         #'precision': 'single',  # メモリ使用量削減
+                        'max_memory_mb': -1,  # メモリ制限を無効化（重要！）
+                        'max_parallel_threads': 1,
+                        'max_parallel_experiments': 1,
+                        'enable_truncation': True,  # 不要な量子ビットを自動削除
                         'blocking_enable': True,
                         'blocking_qubits': blocking_qubits,
                     })
