@@ -562,7 +562,6 @@ class TSPBenchmark:
                     'max_memory_mb': -1,  # メモリ制限を無効化（重要！）
                     'max_parallel_threads': 1,
                     'max_parallel_experiments': 1,
-                    'batched_optimization': True,
                     'enable_truncation': True,  # 不要な量子ビットを自動削除
                 })
                 
