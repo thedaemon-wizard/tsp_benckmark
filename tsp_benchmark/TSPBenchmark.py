@@ -565,8 +565,8 @@ class TSPBenchmark:
                     backend_options.update({
                          #'precision': 'single',  # メモリ使用量削減
                         'max_memory_mb': -1,  # メモリ制限を無効化（重要！）
-                        'max_parallel_threads': 1,
-                        'max_parallel_experiments': 1,
+                        #'max_parallel_threads': 1,
+                        #'max_parallel_experiments': 1,
                         'enable_truncation': True,  # 不要な量子ビットを自動削除
                         'blocking_enable': True,
                         'blocking_qubits': blocking_qubits,
@@ -583,7 +583,7 @@ class TSPBenchmark:
                     pass
             
             backend = AerSimulator(**backend_options)
-            backend.set_max_qubits(200)
+            backend.set_max_qubits(1000)
             print(f"  Avable Device: {available_devices}")
             print(f"  Selected Backend: {backend_options}")
             print(f"  Qubit Property Backend {backend.qubit_properties}")
