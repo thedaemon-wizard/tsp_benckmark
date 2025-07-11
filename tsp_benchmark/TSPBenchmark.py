@@ -33,10 +33,9 @@ import openjij as oj
 from qiskit.quantum_info import SparsePauliOp
 from qiskit.circuit.library import QAOAAnsatz
 from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager
-from qiskit.providers.fake_provider import GenericBackendV2
 
 # AerSimulator V2 primitives setup
-from qiskit_aer import AerSimulator,StatevectorSimulator
+from qiskit_aer import AerSimulator
 from qiskit_aer.primitives import EstimatorV2, SamplerV2
 from qiskit import transpile
 
@@ -300,19 +299,11 @@ class TSPBenchmark:
 
             # Auto-select backend
             aer_backend = self._select_optimal_backend(backend_type, use_gpu, n_vars)
-            backend = GenericBackendV2(num_qubits=n_vars)
 
             # Optimize transpilation
-            if n_vars < 30 and use_gpu:
-                transpiled_ansatz = transpile(ansatz, backend=aer_backend, optimization_level=2)
-            elif n_vars >= 30 and use_gpu: 
-                backend = GenericBackendV2(num_qubits=n_vars, method='statevector', device= 'GPU')
-                transpiled_ansatz = transpile(ansatz, backend=backend, optimization_level=2)
-            else:
-                transpiled_ansatz = transpile(ansatz, backend=backend, optimization_level=2)
-            
-            #pm = generate_preset_pass_manager(backend=aer_backend, optimization_level=2)
-            #transpiled_ansatz = pm.run(ansatz)
+            #transpiled_ansatz = transpile(ansatz, backend=aer_backend, optimization_level=2)
+            pm = generate_preset_pass_manager(backend=aer_backend, optimization_level=2)
+            transpiled_ansatz = pm.run(ansatz)
 
             print(f"  Number of qubits: {n_vars}, QAOA layers: {p}")
             print(f"  Backend: {aer_backend}")
@@ -540,7 +531,7 @@ class TSPBenchmark:
                 #method = 'statevector' if n_vars <= 20 else 'tensor_network'
                 gpu_options = {
                     'device': 'GPU',
-                    'method': 'statevector' if n_vars < 30  else 'tensor_network',   # Optimal for GPU
+                    'method': 'statevector',  # Optimal for GPU
 
                     # Enable batch execution
                     'batched_shots_gpu': True,
@@ -558,7 +549,7 @@ class TSPBenchmark:
             else:
                 if n_vars <= 15:
                     method = 'statevector'
-                elif n_vars <= 100:
+                elif n_vars <= 25:
                     method = 'density_matrix'
                 else:
                     method = 'automatic'
