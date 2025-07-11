@@ -558,10 +558,10 @@ class TSPBenchmark:
             # GPU使用時の制限回避設定
             if device == 'GPU':
                 backend_options.update({
-                    'precision': 'single',  # メモリ使用量削減
-                    'max_memory_mb': -1,  # メモリ制限を無効化（重要！）
-                    'max_parallel_threads': 1,
-                    'max_parallel_experiments': 1,
+                    #'precision': 'single',  # メモリ使用量削減
+                    #'max_memory_mb': -1,  # メモリ制限を無効化（重要！）
+                    #'max_parallel_threads': 1,
+                    #'max_parallel_experiments': 1,
                     'enable_truncation': True,  # 不要な量子ビットを自動削除
                 })
                 
