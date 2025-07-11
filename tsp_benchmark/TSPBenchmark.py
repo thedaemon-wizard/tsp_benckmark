@@ -301,7 +301,7 @@ class TSPBenchmark:
             aer_backend = self._select_optimal_backend(backend_type, use_gpu, n_vars)
 
             # Optimize transpilation
-            transpiled_ansatz = transpile(ansatz, coupling_map=None, backend=aer_backend, optimization_level=2)
+            transpiled_ansatz = transpile(ansatz, backend=aer_backend, optimization_level=2)
             #pm = generate_preset_pass_manager(backend=aer_backend, optimization_level=2)
             #transpiled_ansatz = pm.run(ansatz)
 
@@ -562,7 +562,6 @@ class TSPBenchmark:
                     'max_memory_mb': -1,  # メモリ制限を無効化（重要！）
                     'max_parallel_threads': 1,
                     'max_parallel_experiments': 1,
-                    'coupling_map': None,      # ← これが最重要
                     'enable_truncation': True,  # 不要な量子ビットを自動削除
                 })
                 
@@ -586,8 +585,10 @@ class TSPBenchmark:
                     pass
             
             backend = AerSimulator(**backend_options)
-            print(f"  利用可能デバイス: {available_devices}")
-            print(f"  選択されたバックエンド: {backend_options}")
+            backend.set_max_qubits(200)
+            print(f"  Avable Device: {available_devices}")
+            print(f"  Selected Backend: {backend_options}")
+            print(f"  Qubit Property Backend {backend.qubit_properties}")
             
             return backend
             
