@@ -531,7 +531,7 @@ class TSPBenchmark:
                 #method = 'statevector' if n_vars <= 20 else 'tensor_network'
                 gpu_options = {
                     'device': 'GPU',
-                    'method': 'statevector',  # Optimal for GPU
+                    'method': 'statevector' if n_vars < 30  else 'tensor_network',   # Optimal for GPU
 
                     # Enable batch execution
                     'batched_shots_gpu': True,
@@ -541,7 +541,7 @@ class TSPBenchmark:
                     'runtime_parameter_bind_enable': True,
 
                     # Enable cuStateVec conditionally
-                    'cuStateVec_enable': True if n_vars >= 20 else False,
+                    'cuStateVec_enable': True if n_vars >= 30 else False,
 
 
                 }
