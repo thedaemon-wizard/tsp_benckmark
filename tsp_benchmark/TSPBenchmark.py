@@ -512,64 +512,88 @@ class TSPBenchmark:
 
 
     def _select_optimal_backend(self, backend_type: str, use_gpu: bool, n_vars: int) -> AerSimulator:
-        """Select optimal backend"""
-
-        # Check GPU availability
+        """最適なバックエンドを選択する（量子ビット制限回避版）"""
+        
+        # GPU利用可能性をチェック
         try:
-            # Create instance and call available_devices()
             temp_simulator = AerSimulator()
             available_devices = temp_simulator.available_devices()
             gpu_available = 'GPU' in available_devices
         except Exception as e:
-            print(f"  Warning: GPU availability check error: {e}")
+            print(f"  Warning: GPU可用性チェックでエラー: {e}")
             gpu_available = False
             available_devices = ['CPU']
-
+        
         if backend_type == 'auto':
-            # Auto-selection logic
-            if use_gpu:
-                #method = 'statevector' if n_vars <= 20 else 'tensor_network'
-                gpu_options = {
-                    'device': 'GPU',
-                    'method': 'statevector' if n_vars < 30  else 'tensor_network',   # Optimal for GPU
-
-                    # Enable batch execution
-                    'batched_shots_gpu': True,
-                    'blocking_enable':True,
-
-                    # Enable runtime parameter binding
-                    'runtime_parameter_bind_enable': True,
-
-                    # Enable cuStateVec conditionally
-                    'cuStateVec_enable': True if n_vars >= 30 else False,
-
-
-                }
-                print(f"  Auto-selected: GPU (method={gpu_options['method']})")
-            else:
-                if n_vars <= 15:
+            if use_gpu and gpu_available:
+                # GPU使用時の量子ビット制限回避設定
+                if n_vars <= 20:
                     method = 'statevector'
-                elif n_vars <= 25:
+                elif n_vars <= 30:
                     method = 'density_matrix'
+                else:
+                    method = 'tensor_network'  # 大規模回路用
+                
+                device = 'GPU'
+                print(f"  自動選択: GPU使用 (method={method})")
+            else:
+                # CPU使用時
+                if n_vars <= 25:
+                    method = 'statevector'
                 else:
                     method = 'automatic'
                 device = 'CPU'
-                print(f"  Auto-selected: CPU (method={method})")
+                print(f"  自動選択: CPU使用 (method={method})")
         else:
-            # Manual specification
             method = backend_type
             device = 'GPU' if (use_gpu and gpu_available) else 'CPU'
-
+        
         try:
-            if use_gpu and gpu_available:
-                backend = AerSimulator(**gpu_options)
-            else:
-                backend = AerSimulator(method=method, device=device)
-            print(f"  Available devices: {available_devices}")
+            # 量子ビット制限回避のための設定
+            backend_options = {
+                'method': method,
+                'device': device,
+            }
+            
+            # GPU使用時の制限回避設定
+            if device == 'GPU':
+                backend_options.update({
+                    'precision': 'single',  # メモリ使用量削減
+                    'max_memory_mb': -1,  # メモリ制限を無効化（重要！）
+                    'max_parallel_threads': 1,
+                    'max_parallel_experiments': 1,
+                    'batched_optimization': True,
+                    'enable_truncation': True,  # 不要な量子ビットを自動削除
+                })
+                
+                # 大規模回路用の追加設定
+                if n_vars > 25:
+                    # blocking機能で分散処理
+                    blocking_qubits = min(25, max(20, n_vars - 5))
+                    backend_options.update({
+                        'blocking_enable': True,
+                        'blocking_qubits': blocking_qubits,
+                    })
+                    print(f"  blocking機能有効: blocking_qubits={blocking_qubits}")
+                
+                # cuStateVec使用可能な場合
+                try:
+                    test_sim = AerSimulator(method='statevector', device='GPU')
+                    if hasattr(test_sim.options, 'cuStateVec_enable') and n_vars >= 20:
+                        backend_options['cuStateVec_enable'] = True
+                        print(f"  cuStateVec有効化")
+                except:
+                    pass
+            
+            backend = AerSimulator(**backend_options)
+            print(f"  利用可能デバイス: {available_devices}")
+            print(f"  選択されたバックエンド: {backend_options}")
+            
             return backend
+            
         except Exception as e:
-            print(f"  Warning: Backend configuration error: {e}")
-            print(f"  Fallback: Using default AerSimulator")
+            print(f"  Warning: 指定されたバックエンド設定でエラー: {e}")
+            print(f"  フォールバック: デフォルトのAerSimulatorを使用")
             return AerSimulator()
 
     def _solve_held_karp(self, **kwargs) -> TSPResult:
