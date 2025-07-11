@@ -27,19 +27,14 @@ if __name__ == "__main__":
     print("TSP problem using distance matrix only (Qiskit v2.0 compatible)")
 
     # Small distance matrix for quick test
-    
-    distance_matrix = np.array([
-        [0.0, 2.5, 3.2],
-        [2.5, 0.0, 1.9],
-        [3.2, 1.9, 0.0]
-    ])
-    '''
     distance_matrix = np.array([
     [0.0, 2.5, 3.2, 1.8],
     [2.5, 0.0, 1.9, 3.7],
     [3.2, 1.9, 0.0, 2.8],
     [1.8, 3.7, 2.8, 0.0],
     ])
+
+    '''
     distance_matrix = np.array([
         [0.0, 2.5, 3.2],
         [2.5, 0.0, 1.9],
@@ -89,17 +84,17 @@ if __name__ == "__main__":
     )
     print(f"Result: {result_sa}")
 
-    # 3. QAOA execution 
+    # 3. QAOA execution
     print("\n3. QAOA  - Qiskit v2.0 compatible")
     result_qaoa = tsp.solve(
         algorithm=Algorithm.QAOA,
         p=3,
         optimizer='COBYLA',
         maxiter=500,
-        uniform_penalty_weight=200.0,
+        uniform_penalty_weight=100.0,
         shots=4096,
         backend_type='auto',
-        use_gpu=False
+        use_gpu=True
     )
     print(f"Result: {result_qaoa}")
 
