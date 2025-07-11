@@ -301,7 +301,7 @@ class TSPBenchmark:
             aer_backend = self._select_optimal_backend(backend_type, use_gpu, n_vars)
 
             # Optimize transpilation
-            transpiled_ansatz = transpile(ansatz, backend=aer_backend, optimization_level=2)
+            transpiled_ansatz = transpile(ansatz, coupling_map=None, backend=aer_backend, optimization_level=2)
             #pm = generate_preset_pass_manager(backend=aer_backend, optimization_level=2)
             #transpiled_ansatz = pm.run(ansatz)
 
@@ -562,6 +562,8 @@ class TSPBenchmark:
                     'max_memory_mb': -1,  # メモリ制限を無効化（重要！）
                     'max_parallel_threads': 1,
                     'max_parallel_experiments': 1,
+                    'coupling_map': None,      # ← これが最重要
+                    'max_qubits': None,        # ← これも重要
                     'enable_truncation': True,  # 不要な量子ビットを自動削除
                 })
                 
