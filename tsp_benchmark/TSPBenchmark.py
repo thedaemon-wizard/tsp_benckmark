@@ -531,7 +531,7 @@ class TSPBenchmark:
                 #method = 'statevector' if n_vars <= 20 else 'tensor_network'
                 gpu_options = {
                     'device': 'GPU',
-                    'method': 'statevector',  # Optimal for GPU
+                    'method': 'statevector', if n_vars < 30 else 'tensor_network'  # Optimal for GPU
 
                     # Enable batch execution
                     'batched_shots_gpu': True,
