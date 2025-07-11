@@ -563,7 +563,6 @@ class TSPBenchmark:
                     'max_parallel_threads': 1,
                     'max_parallel_experiments': 1,
                     'coupling_map': None,      # ← これが最重要
-                    'max_qubits': None,        # ← これも重要
                     'enable_truncation': True,  # 不要な量子ビットを自動削除
                 })
                 
