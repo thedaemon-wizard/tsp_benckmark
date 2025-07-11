@@ -512,30 +512,30 @@ class TSPBenchmark:
 
 
     def _select_optimal_backend(self, backend_type: str, use_gpu: bool, n_vars: int) -> AerSimulator:
-        """最適なバックエンドを選択する（量子ビット制限回避版）"""
+        """Selecting the optimal backend (Quantum Bit Limit Avoidance version)"""
         
-        # GPU利用可能性をチェック
+        # Check GPU availability
         try:
             temp_simulator = AerSimulator()
             available_devices = temp_simulator.available_devices()
             gpu_available = 'GPU' in available_devices
         except Exception as e:
-            print(f"  Warning: GPU可用性チェックでエラー: {e}")
+            print(f"  Warning: Error in GPU availability check: {e}")
             gpu_available = False
             available_devices = ['CPU']
         
         if backend_type == 'auto':
             if use_gpu and gpu_available:
-                # GPU使用時の量子ビット制限回避設定
+                # Setting to avoid qubit limit when using GPU
                 if n_vars <= 30:
                     method = 'statevector'
                 #elif n_vars <= 30:
                 #    method = 'density_matrix'
                 else:
-                    method = 'tensor_network'  # 大規模回路用
+                    method = 'tensor_network'  # For large circuits
                 
                 device = 'GPU'
-                print(f"  自動選択: GPU使用 (method={method})")
+                print(f"  Auto Selection: GPU Use (method={method})")
             else:
                 # CPU使用時
                 if n_vars <= 25:
@@ -543,42 +543,43 @@ class TSPBenchmark:
                 else:
                     method = 'automatic'
                 device = 'CPU'
-                print(f"  自動選択: CPU使用 (method={method})")
+                print(f"   Auto Selection: CPU Use (method={method})")
         else:
             method = backend_type
             device = 'GPU' if (use_gpu and gpu_available) else 'CPU'
         
         try:
-            # 量子ビット制限回避のための設定
+            # Setup for avoiding qubit limit
             backend_options = {
                 'method': method,
                 'device': device,
             }
             
-            # GPU使用時の制限回避設定
+            # Limit Avoidance Settings for GPU Use
             if device == 'GPU':
                 
-                # 大規模回路用の追加設定
+                # Additional settings for large circuits
                 if n_vars > 30:
-                    # blocking機能で分散処理
+                    # Distributed processing with blocking function
                     blocking_qubits = min(25, max(20, n_vars - 5))
                     backend_options.update({
-                         #'precision': 'single',  # メモリ使用量削減
-                        'max_memory_mb': -1,  # メモリ制限を無効化（重要！）
+                         #'precision': 'single',  # Reduced memory usage
+                        'max_memory_mb': -1,  # Disable memory limit
                         #'max_parallel_threads': 1,
                         #'max_parallel_experiments': 1,
-                        'enable_truncation': True,  # 不要な量子ビットを自動削除
+                        'enable_truncation': True,  # Automatic deletion of unnecessary qubits
                         'blocking_enable': True,
                         'blocking_qubits': blocking_qubits,
+                        'use_cuTensorNet_autotuning': True # Tensor network option
                     })
-                    print(f"  blocking機能有効: blocking_qubits={blocking_qubits}")
+                    print(f"  blocking function enabled: blocking_qubits={blocking_qubits}")
                 
-                # cuStateVec使用可能な場合
+                # cuStateVec available
                 try:
                     test_sim = AerSimulator(method='statevector', device='GPU')
                     if hasattr(test_sim.options, 'cuStateVec_enable') and n_vars >= 20:
                         backend_options['cuStateVec_enable'] = True
-                        print(f"  cuStateVec有効化")
+                        print(f"  cuStateVec enabled")
                 except:
                     pass
             
@@ -591,8 +592,8 @@ class TSPBenchmark:
             return backend
             
         except Exception as e:
-            print(f"  Warning: 指定されたバックエンド設定でエラー: {e}")
-            print(f"  フォールバック: デフォルトのAerSimulatorを使用")
+            print(f"  Warning: Error in specified backend configuration: {e}")
+            print(f"  Fallback: use default AerSimulator")
             return AerSimulator()
 
     def _solve_held_karp(self, **kwargs) -> TSPResult:
