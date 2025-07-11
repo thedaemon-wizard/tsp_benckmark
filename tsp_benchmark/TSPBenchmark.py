@@ -527,10 +527,10 @@ class TSPBenchmark:
         if backend_type == 'auto':
             if use_gpu and gpu_available:
                 # GPU使用時の量子ビット制限回避設定
-                if n_vars <= 20:
+                if n_vars <= 30:
                     method = 'statevector'
-                elif n_vars <= 30:
-                    method = 'density_matrix'
+                #elif n_vars <= 30:
+                #    method = 'density_matrix'
                 else:
                     method = 'tensor_network'  # 大規模回路用
                 
@@ -559,9 +559,9 @@ class TSPBenchmark:
             if device == 'GPU':
                 backend_options.update({
                     #'precision': 'single',  # メモリ使用量削減
-                    #'max_memory_mb': -1,  # メモリ制限を無効化（重要！）
-                    #'max_parallel_threads': 1,
-                    #'max_parallel_experiments': 1,
+                    'max_memory_mb': -1,  # メモリ制限を無効化（重要！）
+                    'max_parallel_threads': 1,
+                    'max_parallel_experiments': 1,
                     'enable_truncation': True,  # 不要な量子ビットを自動削除
                 })
                 
