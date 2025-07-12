@@ -604,7 +604,7 @@ class TSPBenchmark:
                 # cuStateVec available
                 try:
                     test_sim = AerSimulator(method='statevector', device='GPU')
-                    if hasattr(test_sim.options, 'cuStateVec_enable') and n_vars >= 20:
+                    if hasattr(test_sim.options, 'cuStateVec_enable') and n_vars >= 5:
                         backend_options['cuStateVec_enable'] = True
                         print(f"  cuStateVec enabled")
                 except:
