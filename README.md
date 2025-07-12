@@ -18,10 +18,10 @@ pip install git+https://github.com/thedaemon-wizard/tsp_benckmark
 
 ### Dependencies
 
-- Python 3.8+
+- Python 3.11+
 - NumPy, Matplotlib, Pandas, SciPy
-- OMMX, ommx-openjij-adapter, OpenJij
-- Qiskit, qiskit-aer
+- OMMX, ommx-openjij-adapter 1.9.5, OpenJij
+- Qiskit 2.1.0, qiskit-aer 0.17
 - scikit-learn (optional, for coordinate estimation)
 
 ## Quick Start
