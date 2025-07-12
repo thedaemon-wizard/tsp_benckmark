@@ -296,12 +296,21 @@ class TSPBenchmark:
             # Create QAOA ansatz
             ansatz = QAOAAnsatz(cost_operator=cost_hamiltonian, reps=p)
             ansatz.measure_all()
+            
+            #Store circuit separately, not in additional_info that gets serialized
+            self._last_qaoa_circuit = {
+                'original': ansatz.copy(),
+                'transpiled': None,
+                'parametrized': True,
+                'optimization_level': 2
+            }
 
             # Auto-select backend
             aer_backend = self._select_optimal_backend(backend_type, use_gpu, n_vars)
 
             # Optimize transpilation
             transpiled_ansatz = transpile(ansatz, backend=aer_backend, optimization_level=2)
+
             #pm = generate_preset_pass_manager(backend=aer_backend, optimization_level=2)
             #transpiled_ansatz = pm.run(ansatz)
 
@@ -408,6 +417,24 @@ class TSPBenchmark:
                 print(f"  Best cost: {best_cost:.4f}")
             else:
                 optimal_params = result.x
+            
+            # In Qiskit v2.0, use assign_parameters instead of bind_parameters
+            try:
+                # Create bound circuits using assign_parameters (Qiskit v2.0 compatible)
+                bound_ansatz = ansatz.assign_parameters(optimal_params)
+                bound_transpiled = transpiled_ansatz.assign_parameters(optimal_params)
+                
+                # Update stored circuits with bound versions
+                self._last_qaoa_circuit['bound_original'] = bound_ansatz
+                self._last_qaoa_circuit['bound_transpiled'] = bound_transpiled
+                self._last_qaoa_circuit['optimal_params'] = optimal_params
+                
+                print(f"  Successfully created bound circuits with optimal parameters")
+            except Exception as e:
+                print(f"  Warning: Could not create bound circuits: {e}")
+                # Fallback: store optimal parameters separately
+                self._last_qaoa_circuit['optimal_params'] = optimal_params
+
 
             # Use SamplerV2
             sampler = SamplerV2().from_backend(backend=aer_backend)
@@ -1619,6 +1646,549 @@ class TSPBenchmark:
             f.write("- Multiple format result output functionality\n")
 
         print(f"Report saved to {full_path}")
+        
+    def visualize_qaoa_circuit(self, result: Optional[TSPResult] = None, 
+                          save_path: str = "qaoa_circuit.png", 
+                          output_dir: str = None,
+                          decompose_level: int = 0,
+                          show_layout: bool = True,
+                          show_depth: bool = True,
+                          split_files: bool = True,
+                          max_width: int = 30):
+        """
+        Visualize QAOA quantum circuit
+        
+        Parameters
+        ----------
+        result : TSPResult, optional
+            QAOA result (get from history if not specified)
+        save_path : str
+            Save filename for circuit diagram (base name if split_files=True)
+        output_dir : str, optional
+            Output directory
+        decompose_level : int
+            Level of circuit decomposition (0: no decomposition, 1+: decompose gates)
+        show_layout : bool
+            Whether to show qubit layout information
+        show_depth : bool
+            Whether to show circuit depth
+        split_files : bool
+            Whether to save circuits in separate files for better visibility
+        max_width : int
+            Maximum width before folding the circuit (default: 30)
+        """
+        if result is None:
+            # Find QAOA result from history
+            qaoa_results = [r for r in self.results_history if r.algorithm == "qaoa"]
+            if not qaoa_results:
+                print("No QAOA results found.")
+                return
+            result = qaoa_results[-1]
+        
+        if result.algorithm != "qaoa":
+            print("This result is not from QAOA algorithm.")
+            return
+        
+        # Get circuit from class instance
+        if not hasattr(self, '_last_qaoa_circuit') or self._last_qaoa_circuit is None:
+            print("Circuit information not available. Re-run QAOA to capture circuit.")
+            return
+        
+        circuit_info = self._last_qaoa_circuit
+        
+        # Debug information for Qiskit v2.0
+        print(f"Available circuits in _last_qaoa_circuit: {list(circuit_info.keys())}")
+        
+        # Check what circuits are available
+        has_original = 'original' in circuit_info and circuit_info['original'] is not None
+        has_transpiled = 'transpiled' in circuit_info and circuit_info['transpiled'] is not None
+        has_bound_original = 'bound_original' in circuit_info and circuit_info['bound_original'] is not None
+        has_bound_transpiled = 'bound_transpiled' in circuit_info and circuit_info['bound_transpiled'] is not None
+        
+        # Import circuit drawer
+        from qiskit.visualization import circuit_drawer
+        
+        # Set output path
+        if output_dir:
+            output_path = Path(output_dir)
+            output_path.mkdir(parents=True, exist_ok=True)
+        else:
+            output_path = Path('.')
+        
+        # Get base filename without extension
+        base_name = Path(save_path).stem
+        extension = Path(save_path).suffix or '.png'
+        
+        saved_files = []
+        
+        if split_files:
+            # Save each circuit in a separate file for better visibility
+            
+            # 1. Original or bound original circuit
+            if has_original or has_bound_original:
+                circuit = circuit_info.get('bound_original', circuit_info.get('original'))
+                circuit_type = "bound_original" if has_bound_original else "original"
+                
+                # Calculate optimal fold value based on circuit depth
+                circuit_depth = circuit.depth()
+                fold_value = max_width  # Fold at specified width
+                
+                # Calculate figure size based on folding
+                if circuit_depth > fold_value:
+                    # Multi-row layout
+                    num_rows = (circuit_depth + fold_value - 1) // fold_value
+                    fig_width = min(25, fold_value * 0.5)
+                    fig_height = max(8, num_rows * circuit.num_qubits * 0.3)
+                else:
+                    # Single row layout
+                    fig_width = min(25, circuit_depth * 0.5)
+                    fig_height = max(8, circuit.num_qubits * 0.5)
+                
+                fig = plt.figure(figsize=(fig_width, fig_height))
+                
+                try:
+                    # Draw circuit with folding for better visibility
+                    circuit.draw("mpl")
+                    
+                    title_type = "Bound Original" if has_bound_original else "Original (Parametrized)"
+                    plt.suptitle(f"QAOA {title_type} Circuit\n(p={result.additional_info.get('p', 'N/A')}, "
+                                f"{circuit.num_qubits} qubits, depth={circuit_depth})", 
+                                fontsize=16, y=0.98)
+                    
+                    # Add fold information if circuit was folded
+                    if circuit_depth > fold_value:
+                        plt.figtext(0.5, 0.01, f"Circuit folded at width {fold_value}", 
+                                ha='center', fontsize=10, style='italic')
+                    
+                    # Save with high DPI
+                    file_path = output_path / f"{base_name}_{circuit_type}{extension}"
+                    plt.tight_layout(rect=[0, 0.02, 1, 0.96])
+                    plt.savefig(file_path, dpi=300, bbox_inches='tight', pad_inches=0.5)
+                    plt.close()
+                    saved_files.append(str(file_path))
+                    print(f"Saved {circuit_type} circuit to {file_path} (fold={fold_value})")
+                    
+                except Exception as e:
+                    print(f"Error drawing {circuit_type} circuit: {e}")
+                    plt.close()
+            
+            # 2. Transpiled or bound transpiled circuit
+            if has_transpiled or has_bound_transpiled:
+                transpiled_circuit = circuit_info.get('bound_transpiled', circuit_info.get('transpiled'))
+                circuit_type = "bound_transpiled" if has_bound_transpiled else "transpiled"
+                
+                if decompose_level > 0 and transpiled_circuit is not None:
+                    for _ in range(decompose_level):
+                        transpiled_circuit = transpiled_circuit.decompose()
+                
+                # Transpiled circuits often have much higher depth
+                circuit_depth = transpiled_circuit.depth()
+                
+                # Adaptive fold value for transpiled circuits
+                if circuit_depth > 200:
+                    fold_value = 50  # More aggressive folding for very deep circuits
+                elif circuit_depth > 100:
+                    fold_value = 40
+                else:
+                    fold_value = max_width
+                
+                # Calculate figure size based on folding
+                if circuit_depth > fold_value:
+                    num_rows = (circuit_depth + fold_value - 1) // fold_value
+                    fig_width = min(30, fold_value * 0.4)
+                    fig_height = max(10, num_rows * transpiled_circuit.num_qubits * 0.25)
+                else:
+                    fig_width = min(30, circuit_depth * 0.4)
+                    fig_height = max(10, transpiled_circuit.num_qubits * 0.4)
+                
+                fig = plt.figure(figsize=(fig_width, fig_height))
+                
+                try:
+                    # Draw with adaptive style for transpiled circuits
+                    circuit_drawer(transpiled_circuit, 
+                                output='mpl',
+                                style={
+                                    'fontsize': 12,
+                                    'subfontsize': 10,
+                                    'displaytext': {'fontsize': 11},
+                                    'displaycolor': {'fontsize': 11},
+                                    'gatefacecolor': 'white',
+                                    'barrierfacecolor': 'lightgray',
+                                    'compress': True  # Compress gate spacing
+                                },
+                                fold=fold_value,
+                                plot_barriers=False,  # Hide barriers for cleaner look
+                                initial_state=False,
+                                cregbundle=True,
+                                reverse_bits=False,
+                                justify='left')  # Left justify for better alignment
+                    
+                    title_type = "Bound Transpiled" if has_bound_transpiled else "Transpiled (Parametrized)"
+                    plt.suptitle(f"{title_type} Circuit\n(depth={circuit_depth}, folded at {fold_value})", 
+                                fontsize=16, y=0.98)
+                    
+                    # Add optimization level info
+                    opt_level = circuit_info.get('optimization_level', 'N/A')
+                    plt.figtext(0.5, 0.01, f"Optimization Level: {opt_level}", 
+                            ha='center', fontsize=10, style='italic')
+                    
+                    # Save with high DPI
+                    file_path = output_path / f"{base_name}_{circuit_type}{extension}"
+                    plt.tight_layout(rect=[0, 0.02, 1, 0.96])
+                    plt.savefig(file_path, dpi=300, bbox_inches='tight', pad_inches=0.5)
+                    plt.close()
+                    saved_files.append(str(file_path))
+                    print(f"Saved {circuit_type} circuit to {file_path} (fold={fold_value})")
+                    
+                except Exception as e:
+                    print(f"Error drawing {circuit_type} circuit: {e}")
+                    plt.close()
+            
+            # 3. Circuit statistics in a separate image (same as before)
+            fig = plt.figure(figsize=(10, 10))
+            ax = plt.subplot(1, 1, 1)
+            ax.axis('off')
+            
+            # Collect circuit statistics with enhanced formatting
+            stats_text = "QAOA Circuit Statistics\n" + "="*60 + "\n\n"
+            
+            # Problem information
+            stats_text += f"Problem Size: {self.n_cities} cities ({self.n_cities**2} qubits)\n\n"
+            
+            # Original circuit stats
+            if has_original or has_bound_original:
+                orig = circuit_info.get('bound_original', circuit_info.get('original'))
+                stats_text += "Original Circuit:\n"
+                stats_text += "-"*30 + "\n"
+                stats_text += f"  Dimensions:\n"
+                stats_text += f"    - Qubits: {orig.num_qubits}\n"
+                stats_text += f"    - Total Gates: {orig.size()}\n"
+                stats_text += f"    - Circuit Depth: {orig.depth()}\n"
+                stats_text += f"    - Parameters: {orig.num_parameters}\n"
+                stats_text += f"    - Parameter Bound: {'Yes' if has_bound_original else 'No'}\n"
+                
+                # Gate breakdown with better formatting
+                gate_counts = dict(orig.count_ops())
+                if gate_counts:
+                    stats_text += f"\n  Gate Breakdown:\n"
+                    max_gate_name_len = max(len(gate) for gate in gate_counts.keys())
+                    for gate, count in sorted(gate_counts.items(), key=lambda x: x[1], reverse=True):
+                        stats_text += f"    {gate:<{max_gate_name_len}} : {count:>4}\n"
+                stats_text += "\n"
+            
+            # Transpiled circuit stats
+            if has_transpiled or has_bound_transpiled:
+                trans = circuit_info.get('bound_transpiled', circuit_info.get('transpiled'))
+                stats_text += "Transpiled Circuit:\n"
+                stats_text += "-"*30 + "\n"
+                stats_text += f"  Dimensions:\n"
+                stats_text += f"    - Total Gates: {trans.size()}\n"
+                stats_text += f"    - Circuit Depth: {trans.depth()}\n"
+                stats_text += f"    - Optimization Level: {circuit_info.get('optimization_level', 'N/A')}\n"
+                stats_text += f"    - Parameter Bound: {'Yes' if has_bound_transpiled else 'No'}\n"
+                
+                # Gate breakdown for transpiled circuit
+                gate_counts = dict(trans.count_ops())
+                if gate_counts:
+                    stats_text += f"\n  Basis Gate Breakdown:\n"
+                    # Group by gate type
+                    single_qubit_gates = {}
+                    two_qubit_gates = {}
+                    other_gates = {}
+                    
+                    for gate, count in gate_counts.items():
+                        if gate in ['rx', 'ry', 'rz', 'x', 'y', 'z', 'h', 's', 't', 'sx', 'sxdg']:
+                            single_qubit_gates[gate] = count
+                        elif gate in ['cx', 'cy', 'cz', 'ch', 'swap', 'iswap', 'ecr', 'rzz']:
+                            two_qubit_gates[gate] = count
+                        else:
+                            other_gates[gate] = count
+                    
+                    if single_qubit_gates:
+                        stats_text += "    Single-qubit gates:\n"
+                        for gate, count in sorted(single_qubit_gates.items()):
+                            stats_text += f"      {gate:<6} : {count:>4}\n"
+                    
+                    if two_qubit_gates:
+                        stats_text += "    Two-qubit gates:\n"
+                        for gate, count in sorted(two_qubit_gates.items()):
+                            stats_text += f"      {gate:<6} : {count:>4}\n"
+                    
+                    if other_gates:
+                        stats_text += "    Other gates:\n"
+                        for gate, count in sorted(other_gates.items()):
+                            stats_text += f"      {gate:<6} : {count:>4}\n"
+                stats_text += "\n"
+            
+            # QAOA configuration
+            stats_text += "QAOA Configuration:\n"
+            stats_text += "-"*30 + "\n"
+            stats_text += f"  Algorithm Parameters:\n"
+            stats_text += f"    - QAOA Layers (p): {result.additional_info.get('p', 'N/A')}\n"
+            stats_text += f"    - Optimizer: {result.additional_info.get('optimizer', 'N/A')}\n"
+            stats_text += f"    - Iterations: {result.additional_info.get('iterations', 'N/A')}\n"
+            stats_text += f"    - Shots: {result.additional_info.get('shots', 'N/A')}\n"
+            
+            # Handle final_cost formatting
+            final_cost = result.additional_info.get('final_cost', 'N/A')
+            if isinstance(final_cost, (int, float)) and final_cost != float('inf'):
+                stats_text += f"    - Final Cost: {final_cost:.6f}\n"
+            else:
+                stats_text += f"    - Final Cost: {final_cost}\n"
+            
+            # Add optimal parameters info with nice formatting
+            if 'optimal_params' in circuit_info:
+                params = circuit_info['optimal_params']
+                if hasattr(params, '__len__') and len(params) > 0:
+                    stats_text += f"\n  Optimal Parameters ({len(params)} values):\n"
+                    p_value = result.additional_info.get('p', len(params)//2)
+                    
+                    # Format parameters in columns
+                    beta_params = params[:p_value]
+                    gamma_params = params[p_value:]
+                    
+                    stats_text += "    β (mixer) parameters:\n"
+                    for i, beta in enumerate(beta_params):
+                        stats_text += f"      β[{i}] = {beta:>10.6f} ({beta/np.pi:.3f}π)\n"
+                    
+                    stats_text += "    γ (cost) parameters:\n"
+                    for i, gamma in enumerate(gamma_params):
+                        stats_text += f"      γ[{i}] = {gamma:>10.6f} ({gamma/np.pi:.3f}π)\n"
+            
+            # Environment info
+            stats_text += "\nEnvironment:\n"
+            stats_text += "-"*30 + "\n"
+            try:
+                import qiskit
+                stats_text += f"  - Qiskit Version: {qiskit.__version__}\n"
+            except:
+                pass
+            stats_text += f"  - Backend: {result.additional_info.get('backend_name', 'N/A')}\n"
+            stats_text += f"  - Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+            
+            # Draw text with monospace font
+            ax.text(0.05, 0.98, stats_text, transform=ax.transAxes, 
+                verticalalignment='top', fontfamily='monospace', fontsize=11,
+                linespacing=1.5)
+            
+            # Save statistics
+            file_path = output_path / f"{base_name}_statistics{extension}"
+            plt.tight_layout()
+            plt.savefig(file_path, dpi=300, bbox_inches='tight', pad_inches=0.5)
+            plt.close()
+            saved_files.append(str(file_path))
+            print(f"Saved circuit statistics to {file_path}")
+            
+        else:
+            # Original behavior: all in one file with folding
+            print("Single file mode with folding is not recommended for large circuits.")
+            print("Using split_files=True instead.")
+            return self.visualize_qaoa_circuit(result, save_path, output_dir, 
+                                            decompose_level, show_layout, show_depth, 
+                                            split_files=True, max_width=max_width)
+        
+        print(f"\nQAOA circuit visualization completed. Files saved:")
+        for file in saved_files:
+            print(f"  - {file}")
+        
+        return saved_files
+
+
+    def export_qaoa_circuit_data(self, result: Optional[TSPResult] = None,
+                           format: str = 'qasm',
+                           save_path: str = None,
+                           output_dir: str = None) -> str:
+        """
+        Export QAOA circuit in various formats
+        
+        Parameters
+        ----------
+        result : TSPResult, optional
+            QAOA result
+        format : str
+            Export format ('qasm', 'qasm3', 'qpy', 'json')
+            - 'qasm': OpenQASM 2.0 (requires bound parameters)
+            - 'qasm3': OpenQASM 3.0 (supports parametric circuits)
+            - 'qpy': Qiskit's binary format
+            - 'json': Circuit metadata
+        save_path : str, optional
+            Save filename (auto-generated if not specified)
+        output_dir : str, optional
+            Output directory
+            
+        Returns
+        -------
+        str
+            Path to saved file
+        """
+        if result is None:
+            qaoa_results = [r for r in self.results_history if r.algorithm == "qaoa"]
+            if not qaoa_results:
+                print("No QAOA results found.")
+                return None
+            result = qaoa_results[-1]
+        
+        # Get circuit from class instance
+        if not hasattr(self, '_last_qaoa_circuit') or self._last_qaoa_circuit is None:
+            print("Error: Circuit information not available in _last_qaoa_circuit")
+            return None
+        
+        # Debug information
+        print(f"Available circuits for export: {list(self._last_qaoa_circuit.keys())}")
+        
+        # Select circuit based on format and availability
+        circuit = None
+        if format in ['qasm', 'qasm3']:
+            # For QASM, prefer bound circuits
+            circuit = self._last_qaoa_circuit.get('bound_transpiled')
+            if circuit is None:
+                circuit = self._last_qaoa_circuit.get('bound_original')
+            if circuit is None and format == 'qasm3':
+                # QASM3 can handle parametric circuits
+                circuit = self._last_qaoa_circuit.get('transpiled')
+                if circuit is None:
+                    circuit = self._last_qaoa_circuit.get('original')
+            if circuit is None and format == 'qasm':
+                # For QASM2, try to bind parameters on the fly
+                param_circuit = self._last_qaoa_circuit.get('transpiled', 
+                            self._last_qaoa_circuit.get('original'))
+                if param_circuit and 'optimal_params' in self._last_qaoa_circuit:
+                    try:
+                        circuit = param_circuit.assign_parameters(self._last_qaoa_circuit['optimal_params'])
+                        print("Created bound circuit on the fly for QASM export")
+                    except Exception as e:
+                        print(f"Error binding parameters: {e}")
+        else:
+            # Other formats can handle any circuit type
+            circuit = (self._last_qaoa_circuit.get('bound_transpiled') or
+                    self._last_qaoa_circuit.get('transpiled') or
+                    self._last_qaoa_circuit.get('bound_original') or
+                    self._last_qaoa_circuit.get('original'))
+        
+        if circuit is None:
+            print("Error: No suitable circuit found")
+            return None
+        
+        # Print circuit info
+        print(f"Using circuit: {type(circuit).__name__}, "
+            f"qubits: {circuit.num_qubits}, "
+            f"parameters: {circuit.num_parameters}, "
+            f"depth: {circuit.depth()}")
+        
+        # Auto-generate filename
+        if save_path is None:
+            
+            save_path = f"qaoa_circuit.{format}"
+        
+        # Set output path
+        if output_dir:
+            output_path = Path(output_dir)
+            output_path.mkdir(parents=True, exist_ok=True)
+            full_path = output_path / save_path
+        else:
+            full_path = Path(save_path)
+        
+        try:
+            if format == 'qasm':
+                # Export as OpenQASM 2.0
+                if circuit.num_parameters > 0:
+                    print("Warning: Circuit has unbound parameters. QASM 2.0 export may fail.")
+                
+                try:
+                    from qiskit.qasm2 import dumps
+                    qasm_str = dumps(circuit)
+                except ImportError:
+                    try:
+                        from qiskit import qasm2
+                        qasm_str = qasm2.dumps(circuit)
+                    except:
+                        # Fallback for older versions
+                        qasm_str = circuit.qasm()
+                
+                with open(full_path, 'w') as f:
+                    f.write(qasm_str)
+                print(f"Circuit exported as OpenQASM 2.0 to {full_path}")
+                
+            elif format == 'qasm3':
+                # Export as OpenQASM 3.0 (supports parametric circuits)
+                try:
+                    from qiskit.qasm3 import dumps
+                    qasm3_str = dumps(circuit)
+                    with open(full_path, 'w') as f:
+                        f.write(qasm3_str)
+                    print(f"Circuit exported as OpenQASM 3.0 to {full_path}")
+                except ImportError:
+                    print("Error: OpenQASM 3.0 export requires qiskit-qasm3-import package")
+                    print("Install with: pip install qiskit-qasm3-import")
+                    return None
+                
+            elif format == 'qpy':
+                # Export as QPY
+                try:
+                    from qiskit.qpy import dump
+                    with open(full_path, 'wb') as f:
+                        dump(circuit, f)
+                except ImportError:
+                    from qiskit import qpy
+                    with open(full_path, 'wb') as f:
+                        qpy.dump(circuit, f)
+                print(f"Circuit exported as QPY to {full_path}")
+                
+            elif format == 'json':
+                # Export circuit metadata
+                circuit_data = {
+                    'num_qubits': circuit.num_qubits,
+                    'depth': circuit.depth(),
+                    'size': circuit.size(),
+                    'num_parameters': circuit.num_parameters,
+                    'gate_counts': dict(circuit.count_ops()),
+                    'algorithm': 'QAOA',
+                    'p_layers': result.additional_info.get('p', 'N/A'),
+                    'problem_size': self.n_cities,
+                    'has_parameters': circuit.num_parameters > 0,
+                    'circuit_type': type(circuit).__name__
+                }
+                
+                # Add gate details
+                gate_list = []
+                for instruction in circuit.data:
+                    gate_info = {
+                        'name': instruction.operation.name,
+                        'qubits': [q._index for q in instruction.qubits],
+                        'params': [float(p) if hasattr(p, '__float__') else str(p) 
+                                for p in instruction.operation.params]
+                    }
+                    gate_list.append(gate_info)
+                circuit_data['gates'] = gate_list[:20]  # First 20 gates only
+                
+                # Add optimal parameters if available
+                if 'optimal_params' in self._last_qaoa_circuit:
+                    params = self._last_qaoa_circuit['optimal_params']
+                    if hasattr(params, 'tolist'):
+                        circuit_data['optimal_params'] = params.tolist()
+                    else:
+                        circuit_data['optimal_params'] = list(params)
+                
+                with open(full_path, 'w') as f:
+                    json.dump(circuit_data, f, indent=2)
+                print(f"Circuit metadata exported as JSON to {full_path}")
+            
+            else:
+                raise ValueError(f"Unsupported format: {format}")
+            
+            return str(full_path)
+            
+        except Exception as e:
+            print(f"Error exporting circuit: {e}")
+            import traceback
+            traceback.print_exc()
+            
+            # Provide alternative suggestion
+            if format == 'qasm' and circuit.num_parameters > 0:
+                print("\nSuggestion: Try format='qasm3' for parametric circuits, "
+                    "or ensure the circuit has bound parameters.")
+            
+            return None
 
 
 

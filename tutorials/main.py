@@ -18,7 +18,7 @@ if __name__ == "__main__":
 
     # Set output directory
     output_base_dir = "tsp_benchmark_results"
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    timestamp = datetime.now().strftime('%Y%m%d')
     output_dir = f"{output_base_dir}/{timestamp}"
 
     print(f"Output directory: {output_dir}\n")
@@ -27,18 +27,19 @@ if __name__ == "__main__":
     print("TSP problem using distance matrix only (Qiskit v2.0 compatible)")
 
     # Small distance matrix for quick test
+    
+    distance_matrix = np.array([
+        [0.0, 2.5, 3.2],
+        [2.5, 0.0, 1.9],
+        [3.2, 1.9, 0.0]
+    ])
+
+    '''
     distance_matrix = np.array([
     [0.0, 2.5, 3.2, 1.8],
     [2.5, 0.0, 1.9, 3.7],
     [3.2, 1.9, 0.0, 2.8],
     [1.8, 3.7, 2.8, 0.0],
-    ])
-
-    '''
-    distance_matrix = np.array([
-        [0.0, 2.5, 3.2],
-        [2.5, 0.0, 1.9],
-        [3.2, 1.9, 0.0]
     ])
     distance_matrix = np.array([
     [0.0, 2.5, 3.2, 1.8, 4.1],
@@ -144,5 +145,21 @@ if __name__ == "__main__":
     reports_dir = f"{output_dir}/reports"
     tsp.generate_report(save_path="tsp_benchmark_report.txt",
                        output_dir=reports_dir)
+    
+    # save circuit
+    circuit_dir = f"{output_dir}/circuit"
+    tsp.visualize_qaoa_circuit(result_qaoa, 
+                          save_path="qaoa_circuit_visualization.png",
+                          output_dir=circuit_dir)
+
+    # export circuit using qasm style
+    tsp.export_qaoa_circuit_data(result_qaoa, 
+                                format='qasm',
+                                output_dir=circuit_dir)
+
+    # export circuit using json style
+    tsp.export_qaoa_circuit_data(result_qaoa, 
+                                format='json',
+                                output_dir=circuit_dir)
 
     print("\n=== Qiskit v2.0 Compatible Benchmark Complete ===")

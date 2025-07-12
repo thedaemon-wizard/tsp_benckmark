@@ -31,27 +31,62 @@ class TSPResult:
             if key == 'sampleset':
                 # Exclude SampleSet object
                 continue
+            elif key == 'circuit':
+                # Exclude circuit objects (not JSON serializable)
+                # Instead, add circuit metadata if available
+                if isinstance(value, dict):
+                    circuit_metadata = {}
+                    if 'original' in value and hasattr(value['original'], 'num_qubits'):
+                        circuit_metadata['original_qubits'] = value['original'].num_qubits
+                        circuit_metadata['original_depth'] = value['original'].depth()
+                        circuit_metadata['original_gates'] = value['original'].size()
+                    if 'transpiled' in value and hasattr(value['transpiled'], 'num_qubits'):
+                        circuit_metadata['transpiled_depth'] = value['transpiled'].depth()
+                        circuit_metadata['transpiled_gates'] = value['transpiled'].size()
+                    if circuit_metadata:
+                        serializable_info['circuit_metadata'] = circuit_metadata
+                continue
             elif key == 'optimal_params' and hasattr(value, 'tolist'):
                 # Convert numpy array to list
                 serializable_info[key] = value.tolist()
             elif isinstance(value, (np.ndarray, np.generic)):
                 # Convert other numpy types to list
                 serializable_info[key] = value.tolist()
-            elif isinstance(value, (bool, int, float, str, list, dict, type(None))):
+            elif isinstance(value, (bool, int, str, list, dict, type(None))):
                 # Keep basic types as is
                 serializable_info[key] = value
+            elif isinstance(value, float):
+                # Handle float values including inf
+                if value == float('inf'):
+                    serializable_info[key] = 'inf'
+                elif value == float('-inf'):
+                    serializable_info[key] = '-inf'
+                elif np.isnan(value):
+                    serializable_info[key] = 'nan'
+                else:
+                    serializable_info[key] = value
             else:
                 # Convert other objects to string representation
                 serializable_info[key] = str(value)
-        
+
+        # Handle distance value
+        if self.distance == float('inf'):
+            distance_value = 'inf'
+        elif self.distance == float('-inf'):
+            distance_value = '-inf'
+        elif isinstance(self.distance, float) and np.isnan(self.distance):
+            distance_value = 'nan'
+        else:
+            distance_value = float(self.distance)
+
         return {
             'algorithm': self.algorithm,
             'path': self.path,
-            'distance': float(self.distance) if self.distance != float('inf') else 'inf',
+            'distance': distance_value,
             'feasible': self.feasible,
             'computation_time': self.computation_time,
             'evaluation_metrics': {
-                k: (float(v) if isinstance(v, (int, float)) and v != float('inf') else 
+                k: (float(v) if isinstance(v, (int, float)) and v != float('inf') else
                     ('inf' if v == float('inf') else v))
                 for k, v in self.evaluation_metrics.items()
             },
